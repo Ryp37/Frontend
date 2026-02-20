@@ -1,0 +1,8 @@
+version: "2"
+tunnels:
+  sip:
+    proto: tcp
+    addr: 5060
+  api:
+    proto: http
+    addr: 8080

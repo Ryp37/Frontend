@@ -1,0 +1,8 @@
+{
+  "name": "node-starter",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"Go project: run 'make build' or 'docker-compose up --build' to build.\""
+  }
+}

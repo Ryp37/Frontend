@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: sipguard-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  sipguard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sipguard-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:8080"
+      - "${SIP_PORT:-5060}:5060/udp"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - API_PORT=8080
+      - SIP_PORT=5060
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+    driver: local
