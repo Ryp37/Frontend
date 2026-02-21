@@ -171,6 +171,20 @@ export function StatsCards() {
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px' }}>
               all scored since last Redis flush
             </div>
+            {total > 0 && (
+              <div style={{ marginTop: '10px' }}>
+                <div style={{ display: 'flex', height: '4px', borderRadius: '2px', overflow: 'hidden', gap: '1px' }}>
+                  <div style={{ width: `${(stats.GREEN / total) * 100}%`, background: 'var(--green)', transition: 'width 0.4s ease' }} />
+                  <div style={{ width: `${(stats.YELLOW / total) * 100}%`, background: 'var(--yellow)', transition: 'width 0.4s ease' }} />
+                  <div style={{ width: `${(stats.RED / total) * 100}%`, background: 'var(--red)', transition: 'width 0.4s ease' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--green)' }}>{Math.round((stats.GREEN / total) * 100)}% clean</span>
+                  <span style={{ fontSize: '10px', color: 'var(--yellow)' }}>{Math.round((stats.YELLOW / total) * 100)}% monitored</span>
+                  <span style={{ fontSize: '10px', color: 'var(--red)' }}>{Math.round((stats.RED / total) * 100)}% blocked</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
