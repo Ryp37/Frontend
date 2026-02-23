@@ -36,3 +36,20 @@ export interface HealthResponse {
   status: string
   time: string
 }
+
+// ── Domain Takeover Detection ─────────────────────────────────────────────────
+
+export interface DomainResult {
+  domain: string
+  cname?: string
+  vulnerable: boolean
+  service?: string
+  reason: string
+  error?: string
+}
+
+export interface DomainScanResponse {
+  results: DomainResult[]
+  scanned: number
+  vulnerable: number
+}

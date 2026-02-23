@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"sipguard/internal/domaintakeover"
 	"sipguard/internal/scoring"
 )
 
@@ -239,4 +240,34 @@ func isNotFound(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "not found")
+}
+
+// ScanDomains godoc
+// @Summary      Scan domains for takeover vulnerabilities
+// @Description  Accepts a list of domains and checks each one for dangling CNAME records or known unclaimed-service fingerprints that could allow a subdomain takeover.
+// @Tags         security
+// @Accept       json
+// @Produce      json
+// @Param        body  body      domaintakeover.ScanRequest   true  "Domains to scan (max 50)"
+// @Success      200   {object}  domaintakeover.ScanResponse
+// @Failure      400   {object}  errorResponse
+// @Router       /api/v1/domains/scan [post]
+func (h *Handler) ScanDomains(c *gin.Context) {
+	var req domaintakeover.ScanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: err.Error()})
+		return
+	}
+	if len(req.Domains) == 0 {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "domains list is empty"})
+		return
+	}
+	if len(req.Domains) > 50 {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "too many domains; max 50 per request"})
+		return
+	}
+
+	detector := domaintakeover.New()
+	result := detector.Scan(c.Request.Context(), req.Domains)
+	c.JSON(http.StatusOK, result)
 }
