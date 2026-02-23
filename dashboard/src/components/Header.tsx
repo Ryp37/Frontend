@@ -1,8 +1,24 @@
 import { useEffect, useState } from 'react'
+import { Menu } from 'lucide-react'
 import { getHealth } from '../api/client'
+import type { Page } from '../App'
 
-export function Header() {
+const PAGE_META: Record<Page, { title: string; subtitle: string }> = {
+  dashboard: { title: 'Dashboard',    subtitle: 'Real-time call traffic overview'               },
+  calls:     { title: 'Call Checker', subtitle: 'Score and monitor individual calls'             },
+  whitelist: { title: 'Whitelist',    subtitle: 'Manage caller prefix rules and tiers'           },
+  greylist:  { title: 'Greylist',     subtitle: 'YELLOW-tier callers with auto-expiry TTL'       },
+  settings:  { title: 'Settings',     subtitle: 'Service configuration and scoring thresholds'  },
+}
+
+interface HeaderProps {
+  page:            Page
+  onToggleSidebar: () => void
+}
+
+export function Header({ page, onToggleSidebar }: HeaderProps) {
   const [online, setOnline] = useState<boolean | null>(null)
+  const meta = PAGE_META[page]
 
   useEffect(() => {
     const check = () =>
@@ -16,86 +32,56 @@ export function Header() {
   }, [])
 
   return (
-    <header style={{
-      background: 'var(--bg-card)',
-      borderBottom: '1px solid var(--border)',
-      padding: '0 24px',
-      height: '56px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      position: 'sticky',
-      top: 0,
-      zIndex: 100,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: '28px',
-          height: '28px',
-          background: 'linear-gradient(135deg, #1e3a5f, #3b82f6)',
-          borderRadius: '7px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '14px',
-          flexShrink: 0,
-        }}>
-          🛡
-        </div>
+    <header className="h-14 bg-surface-card border-b border-line flex items-center justify-between px-5 shrink-0 z-10">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onToggleSidebar}
+          className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors"
+          aria-label="Toggle sidebar"
+        >
+          <Menu size={16} />
+        </button>
         <div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-            SIP Guard
-          </div>
-          <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            Fraud Detection Console
-          </div>
+          <h1 className="text-[15px] font-semibold text-ink tracking-tight leading-none">
+            {meta.title}
+          </h1>
+          <p className="text-[11px] text-ink-muted mt-0.5">{meta.subtitle}</p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-        <a
-          href="http://localhost:8080/swagger/index.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontSize: '12px',
-            color: 'var(--text-secondary)',
-            textDecoration: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            transition: 'color var(--transition)',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--blue)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-            <polyline points="15 3 21 3 21 9"/>
-            <line x1="10" y1="14" x2="21" y2="3"/>
-          </svg>
-          Swagger UI
-        </a>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+      <div className="flex items-center gap-5">
+        {/* API status */}
+        <div className="flex items-center gap-2">
           {online === null ? (
             <span className="spinner" />
           ) : (
-            <span className="pulse-dot" style={{
-              background: online ? 'var(--green)' : 'var(--red)',
-              boxShadow: online ? '0 0 6px var(--green-glow)' : '0 0 6px var(--red-glow)',
-            }} />
+            <span
+              className="w-2 h-2 rounded-full pulse-dot-anim"
+              style={{
+                background:  online ? '#22c55e' : '#ef4444',
+                boxShadow:   online
+                  ? '0 0 6px rgba(34,197,94,0.55)'
+                  : '0 0 6px rgba(239,68,68,0.55)',
+              }}
+            />
           )}
-          <span style={{
-            fontSize: '12px',
-            color: online === null
-              ? 'var(--text-muted)'
-              : online ? 'var(--green)' : 'var(--red)',
-            fontWeight: 500,
-          }}>
-            {online === null ? 'Connecting' : online ? 'API Online' : 'API Offline'}
+          <span
+            className={`text-[12px] font-medium ${
+              online === null
+                ? 'text-ink-muted'
+                : online
+                ? 'text-green-400'
+                : 'text-red-400'
+            }`}
+          >
+            {online === null ? 'Connecting…' : online ? 'API Online' : 'API Offline'}
           </span>
         </div>
+
+        {/* API endpoint */}
+        <span className="text-[11px] text-ink-muted font-mono hidden sm:block">
+          :8080
+        </span>
       </div>
     </header>
   )

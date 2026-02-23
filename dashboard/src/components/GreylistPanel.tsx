@@ -1,37 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Clock, X, AlertCircle } from 'lucide-react'
 import { usePolling } from '../hooks/usePolling'
 import { getGreylist, deleteGreylistEntry } from '../api/client'
 import type { GreylistEntry } from '../api/types'
+import { formatTime, formatDuration } from '../lib/utils'
 
 const MAX_TTL = 3600
-
-function formatDuration(seconds: number): string {
-  if (seconds <= 0) return '0s'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  if (h > 0) return `${h}h ${m}m`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  } catch {
-    return iso
-  }
-}
 
 interface LiveEntry extends GreylistEntry {
   liveTTL: number
 }
 
+function ttlColor(ttl: number): string {
+  const pct = ttl / MAX_TTL
+  if (pct > 0.5) return '#f59e0b'
+  if (pct > 0.2) return '#f97316'
+  return '#ef4444'
+}
+
 export function GreylistPanel() {
-  const [entries, setEntries] = useState<LiveEntry[]>([])
-  const [loadError, setLoadError] = useState('')
+  const [entries,    setEntries]    = useState<LiveEntry[]>([])
+  const [loadError,  setLoadError]  = useState('')
   const [deletingID, setDeletingID] = useState<string | null>(null)
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tickRef                     = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchList = useCallback(() => {
     getGreylist()
@@ -44,6 +35,7 @@ export function GreylistPanel() {
 
   usePolling(fetchList, 15_000)
 
+  /* live countdown */
   useEffect(() => {
     tickRef.current = setInterval(() => {
       setEntries(prev =>
@@ -69,60 +61,68 @@ export function GreylistPanel() {
     }
   }
 
-  const ttlColor = (ttl: number) => {
-    const pct = ttl / MAX_TTL
-    if (pct > 0.5) return 'var(--yellow)'
-    if (pct > 0.2) return '#f97316'
-    return 'var(--red)'
-  }
-
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="card flex flex-col h-full">
+      {/* Header */}
       <div className="section-header">
         <span className="section-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
+          <Clock size={14} />
           Greylist
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>auto-expires · 1h TTL</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-ink-muted">auto-expires · 1h TTL</span>
           <span className="section-count">{entries.length} active</span>
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-        {loadError && <div className="error-banner" style={{ margin: '10px' }}>{loadError}</div>}
+      {/* List */}
+      <div className="flex-1 overflow-auto min-h-0">
+        {loadError && (
+          <div className="error-banner m-3 flex items-center gap-2">
+            <AlertCircle size={13} className="shrink-0" />
+            {loadError}
+          </div>
+        )}
+
         {entries.length === 0 && !loadError ? (
           <div className="empty-state">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
-            </svg>
-            <div>Greylist is empty.<br/>YELLOW-scored callers appear here automatically.</div>
+            <Clock size={32} />
+            <div>
+              Greylist is empty.
+              <br />
+              YELLOW-scored callers appear here automatically.
+            </div>
           </div>
         ) : (
-          <table>
+          <table className="w-full text-[13px] border-collapse">
             <thead>
               <tr>
-                <th>Caller ID</th>
-                <th>Added At</th>
-                <th>TTL Remaining</th>
-                <th style={{ width: 40 }}></th>
+                {['Caller ID', 'Added At', 'TTL Remaining', ''].map(h => (
+                  <th
+                    key={h}
+                    className="px-4 py-[9px] text-left text-[11px] font-semibold text-ink-muted uppercase tracking-wider border-b border-line bg-surface-card sticky top-0 z-10"
+                    style={h === '' ? { width: 40 } : undefined}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {entries.map(entry => {
-                const pct = Math.min(100, (entry.liveTTL / MAX_TTL) * 100)
+                const pct   = Math.min(100, (entry.liveTTL / MAX_TTL) * 100)
                 const color = ttlColor(entry.liveTTL)
+
                 return (
-                  <tr key={entry.caller_id}>
-                    <td className="td-mono">{entry.caller_id}</td>
-                    <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {formatDate(entry.added_at)}
+                  <tr
+                    key={entry.caller_id}
+                    className="border-b border-line last:border-b-0 hover:bg-surface-row transition-colors"
+                  >
+                    <td className="td-mono px-4 py-[9px]">{entry.caller_id}</td>
+                    <td className="px-4 py-[9px] text-ink-muted text-[12px]">
+                      {formatTime(entry.added_at)}
                     </td>
-                    <td>
+                    <td className="px-4 py-[9px]">
                       <div className="ttl-bar-wrap">
                         <span className="ttl-text" style={{ color }}>
                           {formatDuration(entry.liveTTL)}
@@ -135,18 +135,17 @@ export function GreylistPanel() {
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td className="px-4 py-[9px]">
                       <button
                         className="btn btn-ghost btn-sm"
                         onClick={() => handleDelete(entry.caller_id)}
                         disabled={deletingID === entry.caller_id}
                         title="Remove from greylist"
                       >
-                        {deletingID === entry.caller_id ? <span className="spinner" /> : (
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18"/>
-                            <line x1="6" y1="6" x2="18" y2="18"/>
-                          </svg>
+                        {deletingID === entry.caller_id ? (
+                          <span className="spinner" />
+                        ) : (
+                          <X size={11} />
                         )}
                       </button>
                     </td>

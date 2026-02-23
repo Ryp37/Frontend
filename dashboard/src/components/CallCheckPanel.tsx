@@ -1,28 +1,26 @@
 import { useState, useRef, useEffect } from 'react'
+import { Phone, ChevronRight, AlertCircle } from 'lucide-react'
 import { checkCall } from '../api/client'
 import type { CallLogEntry } from '../api/types'
 import { StatusBadge } from './StatusBadge'
+import { formatTime } from '../lib/utils'
 
-function formatTime(iso: string) {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  } catch {
-    return iso
-  }
+const STATUS_LEFT: Record<string, string> = {
+  GREEN:  '#22c55e',
+  YELLOW: '#f59e0b',
+  RED:    '#ef4444',
 }
 
 export function CallCheckPanel() {
-  const [callerID, setCallerID] = useState('+46701234567')
+  const [callerID,    setCallerID]    = useState('+46701234567')
   const [destination, setDestination] = useState('+46891234567')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [log, setLog] = useState<CallLogEntry[]>([])
-  const logRef = useRef<HTMLDivElement>(null)
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState('')
+  const [log,         setLog]         = useState<CallLogEntry[]>([])
+  const logRef                        = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (logRef.current && log.length > 0) {
-      logRef.current.scrollTop = 0
-    }
+    if (logRef.current && log.length > 0) logRef.current.scrollTop = 0
   }, [log.length])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -34,8 +32,8 @@ export function CallCheckPanel() {
       const result = await checkCall(callerID.trim(), destination.trim())
       const entry: CallLogEntry = {
         ...result,
-        id: crypto.randomUUID(),
-        caller_id: callerID.trim(),
+        id:          crypto.randomUUID(),
+        caller_id:   callerID.trim(),
         destination: destination.trim(),
       }
       setLog(prev => [entry, ...prev].slice(0, 60))
@@ -46,26 +44,23 @@ export function CallCheckPanel() {
     }
   }
 
-  const statusColors: Record<string, string> = {
-    GREEN: 'var(--green)',
-    YELLOW: 'var(--yellow)',
-    RED: 'var(--red)',
-  }
-
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="card flex flex-col h-full">
+      {/* Header */}
       <div className="section-header">
         <span className="section-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.6 4.87 2 2 0 0 1 3.58 2.69h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.1a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-          </svg>
+          <Phone size={14} />
           Call Checker
         </span>
         <span className="section-count">{log.length} entries</span>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+      {/* Form */}
+      <form
+        onSubmit={handleSubmit}
+        className="p-4 border-b border-line flex flex-col gap-2.5"
+      >
+        <div className="grid grid-cols-2 gap-2.5">
           <div className="field">
             <label>Caller ID</label>
             <input
@@ -89,79 +84,81 @@ export function CallCheckPanel() {
             />
           </div>
         </div>
-        {error && <div className="error-banner">{error}</div>}
+
+        {error && (
+          <div className="error-banner flex items-center gap-2">
+            <AlertCircle size={13} className="shrink-0" />
+            {error}
+          </div>
+        )}
+
         <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? <span className="spinner" /> : (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+          {loading ? (
+            <span className="spinner" />
+          ) : (
+            <ChevronRight size={14} />
           )}
           {loading ? 'Scoring…' : 'Check Call'}
         </button>
       </form>
 
-      <div
-        ref={logRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          minHeight: 0,
-        }}
-      >
+      {/* Log */}
+      <div ref={logRef} className="flex-1 overflow-y-auto min-h-0">
         {log.length === 0 ? (
           <div className="empty-state">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.6 4.87 2 2 0 0 1 3.58 2.69h3"/>
-            </svg>
-            <div>No calls scored yet.<br/>Submit a check above to populate the log.</div>
+            <Phone size={32} />
+            <div>
+              No calls scored yet.
+              <br />
+              Submit a check above to populate the log.
+            </div>
           </div>
         ) : (
-          <div>
-            {log.map((entry, i) => (
-              <div
-                key={entry.id}
-                className={i === 0 ? 'fade-in' : undefined}
-                style={{
-                  padding: '10px 14px',
-                  borderBottom: '1px solid var(--border)',
-                  borderLeft: `3px solid ${statusColors[entry.status] ?? 'var(--border)'}`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '5px',
-                  transition: 'background var(--transition)',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-row-hover)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)', flexWrap: 'wrap' }}>
-                    <span>{entry.caller_id}</span>
-                    <span style={{ color: 'var(--text-muted)' }}>→</span>
-                    <span>{entry.destination}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                    <StatusBadge status={entry.status} size="sm" />
-                    {entry.blocked && (
-                      <span style={{ fontSize: '10px', color: 'var(--red)', fontWeight: 600 }}>BLOCKED</span>
-                    )}
-                  </div>
+          log.map((entry, i) => (
+            <div
+              key={entry.id}
+              className={`
+                px-4 py-2.5 border-b border-line
+                hover:bg-surface-row transition-colors duration-100
+                ${i === 0 ? 'fade-in' : ''}
+              `}
+              style={{
+                borderLeft: `3px solid ${STATUS_LEFT[entry.status] ?? '#1a2d42'}`,
+              }}
+            >
+              {/* Row 1: numbers + badge */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 font-mono text-[12px] text-ink flex-wrap">
+                  <span>{entry.caller_id}</span>
+                  <span className="text-ink-muted">→</span>
+                  <span>{entry.destination}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {entry.reason}
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                      score:{entry.score}
+                <div className="flex items-center gap-2 shrink-0">
+                  <StatusBadge status={entry.status} size="sm" />
+                  {entry.blocked && (
+                    <span className="text-[10px] text-red-400 font-bold tracking-wide">
+                      BLOCKED
                     </span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {formatTime(entry.timestamp)}
-                    </span>
-                  </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
+
+              {/* Row 2: reason + score + time */}
+              <div className="flex items-center justify-between gap-2 mt-1">
+                <span className="text-[11px] text-ink-muted truncate flex-1">
+                  {entry.reason}
+                </span>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <span className="font-mono text-[11px] text-ink-secondary">
+                    score:{entry.score}
+                  </span>
+                  <span className="text-[11px] text-ink-muted">
+                    {formatTime(entry.timestamp)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
