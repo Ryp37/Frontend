@@ -100,24 +100,25 @@ sev_label() {
   esac
 }
 
-# ── Probe (HEAD → GET fallback) ───────────────────────────────────────────────
+# ── Probe (HEAD → GET fallback, IPv4 forced) ─────────────────────────────────
+# Mobile/Termux networks often have broken IPv6; --ipv4 prevents hangs.
+CURL_BASE=(curl -sk -4 --max-time "$TIMEOUT" --location --max-redirs 3
+           -A "SecurityScanner/2.0 (security-audit)")
+
 probe() {
   local url="$1"
   local code
-  code=$(curl -sk -o /dev/null -w "%{http_code}" \
-    --max-time "$TIMEOUT" --location --max-redirs 3 \
-    -A "SecurityScanner/2.0 (security-audit)" -X HEAD "$url" 2>/dev/null) || code=0
+  code=$("${CURL_BASE[@]}" -o /dev/null -w "%{http_code}" -X HEAD "$url" 2>/dev/null)
+  [[ -z "$code" ]] && code="000"
   [[ "$code" == "405" || "$code" == "501" ]] && \
-    code=$(curl -sk -o /dev/null -w "%{http_code}" \
-      --max-time "$TIMEOUT" --location --max-redirs 3 \
-      -A "SecurityScanner/2.0 (security-audit)" "$url" 2>/dev/null) || code=0
+    code=$("${CURL_BASE[@]}" -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)
+  [[ -z "$code" ]] && code="000"
   echo "$code"
 }
 
 # ── Probe + capture body (for crawl/dir-listing) ─────────────────────────────
 probe_body() {
-  curl -sk --max-time "$TIMEOUT" --location --max-redirs 3 \
-    -A "SecurityScanner/2.0 (security-audit)" "$1" 2>/dev/null
+  "${CURL_BASE[@]}" "$1" 2>/dev/null
 }
 
 # ── Record a finding ──────────────────────────────────────────────────────────
@@ -469,11 +470,27 @@ phase_reachability() {
   echo -e "\n${BOLD}[Phase 0]${RESET} Connectivity check"
   local code
   code=$(probe "$DOMAIN/")
-  if [[ "$code" == "0" ]]; then
-    echo -e "  ${RED}Cannot reach ${DOMAIN} — aborting.${RESET}"
+
+  # If HTTPS fails, try HTTP automatically
+  if [[ "$code" == "000" || "$code" == "0" || -z "$code" ]]; then
+    echo -e "  ${YELLOW}HTTPS unreachable, trying HTTP…${RESET}"
+    if [[ "$DOMAIN" == https://* ]]; then
+      local http_domain="http://${DOMAIN#https://}"
+      code=$(probe "$http_domain/")
+      if [[ "$code" != "000" && "$code" != "0" && -n "$code" ]]; then
+        DOMAIN="$http_domain"
+        echo -e "  ${YELLOW}Switched to HTTP:${RESET} ${DOMAIN}"
+      fi
+    fi
+  fi
+
+  if [[ "$code" == "000" || "$code" == "0" || -z "$code" ]]; then
+    echo -e "  ${RED}Cannot reach ${DOMAIN}${RESET}"
+    echo -e "  ${DIM}Tips: check the domain spelling, or try with www. prefix${RESET}"
     exit 1
   fi
-  echo -e "  ${GREEN}Reachable${RESET} (HTTP $code)"
+
+  echo -e "  ${GREEN}Reachable${RESET} (HTTP $code)  →  ${DOMAIN}"
 }
 
 # ── Phase 1: Subdomain enumeration ────────────────────────────────────────────
