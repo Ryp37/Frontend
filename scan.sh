@@ -67,6 +67,19 @@ DOMAIN="${DOMAIN%/}"
 BASE_HOST="${DOMAIN#*://}"   # example.com (no scheme)
 SCHEME="${DOMAIN%%://*}"     # https or http
 
+# ── Temp files for cross-subshell IPC ────────────────────────────────────────
+# bash arrays/variables modified inside { } & subshells are lost when the
+# subshell exits. Writing to files is the portable fix.
+TMP_DIR=$(mktemp -d)
+touch "$TMP_DIR/critical" "$TMP_DIR/high" "$TMP_DIR/medium" "$TMP_DIR/info"
+touch "$TMP_DIR/scanned" "$TMP_DIR/logfile"
+
+# EXIT trap is inherited by every { } & subshell and every $() substitution.
+# Without the BASHPID guard, each subshell would run rm -rf on exit, deleting
+# TMP_DIR before the main process can read results.
+_MAIN_PID=$BASHPID
+trap '[[ $BASHPID -eq $_MAIN_PID ]] && rm -rf "$TMP_DIR"' EXIT
+
 # ── Output file setup ─────────────────────────────────────────────────────────
 if [[ -n "$OUTPUT" ]]; then
   > "$OUTPUT"
@@ -74,14 +87,6 @@ if [[ -n "$OUTPUT" ]]; then
 else
   log_file() { echo "$1" >> "$TMP_DIR/logfile"; }
 fi
-
-# ── Temp files for cross-subshell IPC ────────────────────────────────────────
-# bash arrays/variables modified inside { } & subshells are lost when the
-# subshell exits. Writing to files is the portable fix.
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
-touch "$TMP_DIR/critical" "$TMP_DIR/high" "$TMP_DIR/medium" "$TMP_DIR/info"
-touch "$TMP_DIR/scanned" "$TMP_DIR/logfile"
 
 # ── Severity helpers ──────────────────────────────────────────────────────────
 sev_color() {
