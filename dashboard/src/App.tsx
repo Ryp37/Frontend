@@ -3,6 +3,7 @@ import { StatsCards } from './components/StatsCards'
 import { CallCheckPanel } from './components/CallCheckPanel'
 import { WhitelistPanel } from './components/WhitelistPanel'
 import { GreylistPanel } from './components/GreylistPanel'
+import { DocScannerPanel } from './components/DocScannerPanel'
 
 export function App() {
   return (
@@ -42,6 +43,15 @@ export function App() {
           <CallCheckPanel />
           <WhitelistPanel />
           <GreylistPanel />
+        </div>
+
+        <div>
+          <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Exposed Document Scanner
+            </h2>
+          </div>
+          <DocScannerPanel />
         </div>
       </main>
 

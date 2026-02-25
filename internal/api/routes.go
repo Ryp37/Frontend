@@ -33,6 +33,8 @@ func RegisterRoutes(r *gin.Engine, h *Handler, log zerolog.Logger) {
 			gl.GET("", h.ListGreylist)
 			gl.DELETE("/:id", h.DeleteGreylist)
 		}
+
+		v1.POST("/scan", h.ScanDomain)
 	}
 }
 

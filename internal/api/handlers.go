@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"sipguard/internal/scanner"
 	"sipguard/internal/scoring"
 )
 
@@ -232,6 +233,38 @@ func (h *Handler) DeleteGreylist(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, messageResponse{Message: "caller removed from greylist"})
+}
+
+type scanRequest struct {
+	Domain string `json:"domain" binding:"required" example:"example.com"`
+}
+
+// ScanDomain godoc
+// @Summary      Scan a domain for exposed sensitive files
+// @Description  Probes common sensitive paths on a domain to identify files that should not be publicly accessible. Intended for use against systems you own or have explicit authorisation to test.
+// @Tags         scanner
+// @Accept       json
+// @Produce      json
+// @Param        body  body      scanRequest         true  "Target domain"
+// @Success      200   {object}  scanner.ScanResult
+// @Failure      400   {object}  errorResponse
+// @Failure      500   {object}  errorResponse
+// @Router       /api/v1/scan [post]
+func (h *Handler) ScanDomain(c *gin.Context) {
+	var req scanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: err.Error()})
+		return
+	}
+
+	sc := scanner.New()
+	result, err := sc.Scan(c.Request.Context(), req.Domain)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: "scan failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 func isNotFound(err error) bool {

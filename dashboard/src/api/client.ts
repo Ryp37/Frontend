@@ -4,6 +4,7 @@ import type {
   WhitelistEntry,
   GreylistEntry,
   HealthResponse,
+  ScanResult,
 } from './types'
 
 const BASE = '/api/v1'
@@ -62,5 +63,13 @@ export function getGreylist(): Promise<GreylistEntry[]> {
 export function deleteGreylistEntry(callerID: string): Promise<void> {
   return request<void>(`${BASE}/greylist/${encodeURIComponent(callerID)}`, {
     method: 'DELETE',
+  })
+}
+
+export function scanDomain(domain: string): Promise<ScanResult> {
+  return request<ScanResult>(`${BASE}/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain }),
   })
 }

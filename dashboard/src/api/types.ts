@@ -36,3 +36,21 @@ export interface HealthResponse {
   status: string
   time: string
 }
+
+export type ScanSeverity = 'critical' | 'high' | 'medium'
+
+export interface ScanFinding {
+  url: string
+  path: string
+  status_code: number
+  severity: ScanSeverity
+  description: string
+  content_length: number
+}
+
+export interface ScanResult {
+  domain: string
+  findings: ScanFinding[]
+  scanned: number
+  found: number
+}
