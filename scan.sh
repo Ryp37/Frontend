@@ -133,10 +133,27 @@ record() {
 }
 
 # ── Parallel job pool ─────────────────────────────────────────────────────────
-# Runs probe jobs in background, limits concurrency to $PARALLEL.
-JOBS=0
+# In non-interactive shells, $(jobs -rp) inside a subshell cannot see the
+# parent's job table, so the old polling loop never throttled anything —
+# all probes were fired at once, causing an OOM kill.
+# Fix: track PIDs explicitly in the parent shell and use 'wait $pid'.
+declare -a _PIDS=()
 wait_for_slot() {
-  while [[ $(jobs -rp | wc -l) -ge $PARALLEL ]]; do sleep 0.1; done
+  # Capture PID of the most recently backgrounded job ('&' sets $!)
+  local p="$!"
+  [[ -n "$p" ]] && _PIDS+=("$p")
+
+  # Block until the number of running jobs drops below $PARALLEL
+  while (( ${#_PIDS[@]} >= PARALLEL )); do
+    wait "${_PIDS[0]}" 2>/dev/null || true   # wait for oldest
+    _PIDS=("${_PIDS[@]:1}")                  # remove it from list
+    # Prune any other jobs that already finished
+    local still=()
+    for p in "${_PIDS[@]}"; do
+      kill -0 "$p" 2>/dev/null && still+=("$p")
+    done
+    _PIDS=("${still[@]}")
+  done
 }
 
 # ── Progress ──────────────────────────────────────────────────────────────────
