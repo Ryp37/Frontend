@@ -72,15 +72,16 @@ if [[ -n "$OUTPUT" ]]; then
   > "$OUTPUT"
   log_file() { echo "$1" >> "$OUTPUT"; }
 else
-  log_file() { :; }
+  log_file() { echo "$1" >> "$TMP_DIR/logfile"; }
 fi
 
-# ── Counters & result arrays ──────────────────────────────────────────────────
-TOTAL_SCANNED=0; TOTAL_FOUND=0
-declare -a RES_CRITICAL=(); declare -a RES_HIGH=(); declare -a RES_MEDIUM=()
-declare -a RES_INFO=()
+# ── Temp files for cross-subshell IPC ────────────────────────────────────────
+# bash arrays/variables modified inside { } & subshells are lost when the
+# subshell exits. Writing to files is the portable fix.
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
+touch "$TMP_DIR/critical" "$TMP_DIR/high" "$TMP_DIR/medium" "$TMP_DIR/info"
+touch "$TMP_DIR/scanned" "$TMP_DIR/logfile"
 
 # ── Severity helpers ──────────────────────────────────────────────────────────
 sev_color() {
@@ -122,17 +123,12 @@ probe_body() {
 }
 
 # ── Record a finding ──────────────────────────────────────────────────────────
+# Writes to a temp file so subshells can persist results to the parent.
 record() {
   local sev="$1" url="$2" desc="$3"
   local line
   line="$(sev_color "$sev")$(sev_label "$sev")${RESET}  ${url}  ${DIM}${desc}${RESET}"
-  case "$sev" in
-    critical) RES_CRITICAL+=("$line") ;;
-    high)     RES_HIGH+=("$line") ;;
-    medium)   RES_MEDIUM+=("$line") ;;
-    info)     RES_INFO+=("$line") ;;
-  esac
-  TOTAL_FOUND=$((TOTAL_FOUND+1))
+  echo "$line" >> "$TMP_DIR/$sev"
   log_file "[${sev^^}] ${url} — ${desc}"
 }
 
@@ -503,13 +499,11 @@ phase_subdomains() {
     show_progress "$target_url"
     {
       local code; code=$(probe "$target_url/")
-      if [[ "$code" != "0" && "$code" != "400" ]]; then
-        local result="${CYAN}SUBDOMAIN${RESET}  ${target_url}  ${DIM}HTTP ${code}${RESET}"
-        RES_INFO+=("$result")
-        TOTAL_FOUND=$((TOTAL_FOUND+1))
+      if [[ "$code" != "0" && "$code" != "000" && "$code" != "400" && -n "$code" ]]; then
+        echo "${CYAN}SUBDOMAIN${RESET}  ${target_url}  ${DIM}HTTP ${code}${RESET}" >> "$TMP_DIR/info"
         log_file "[INFO] Subdomain alive: ${target_url} (HTTP ${code})"
       fi
-      TOTAL_SCANNED=$((TOTAL_SCANNED+1))
+      echo . >> "$TMP_DIR/scanned"
     } &
     i=$((i+1)); wait_for_slot
   done
@@ -529,7 +523,7 @@ phase_root() {
     show_progress "$path"
     {
       local code; code=$(probe "$url")
-      TOTAL_SCANNED=$((TOTAL_SCANNED+1))
+      echo . >> "$TMP_DIR/scanned"
       [[ "$code" == "200" ]] && record "$sev" "$url" "$desc"
     } &
     i=$((i+1)); wait_for_slot
@@ -551,7 +545,7 @@ phase_deep() {
       show_progress "${base}${path}"
       {
         local code; code=$(probe "$url")
-        TOTAL_SCANNED=$((TOTAL_SCANNED+1))
+        echo . >> "$TMP_DIR/scanned"
         [[ "$code" == "200" ]] && record "$sev" "$url" "$desc (in ${base})"
       } &
       wait_for_slot
@@ -574,7 +568,7 @@ phase_backup() {
       show_progress "$path"
       {
         local code; code=$(probe "$url")
-        TOTAL_SCANNED=$((TOTAL_SCANNED+1))
+        echo . >> "$TMP_DIR/scanned"
         [[ "$code" == "200" ]] && record "high" "$url" "Backup/swap variant of ${base}"
       } &
       wait_for_slot
@@ -597,7 +591,7 @@ phase_dirlisting() {
     show_progress "$url"
     {
       local body; body=$(probe_body "$url")
-      TOTAL_SCANNED=$((TOTAL_SCANNED+1))
+      echo . >> "$TMP_DIR/scanned"
       if echo "$body" | grep -qiE "Index of |Directory listing for |Parent Directory|<title>Index of"; then
         record "high" "$url" "Directory listing enabled – file tree exposed"
       fi
@@ -640,7 +634,7 @@ phase_crawl() {
     show_progress "link: $link"
     {
       local code; code=$(probe "$full_url")
-      TOTAL_SCANNED=$((TOTAL_SCANNED+1))
+      echo . >> "$TMP_DIR/scanned"
       # Flag if it looks like a sensitive file
       if [[ "$code" == "200" ]]; then
         if echo "$link" | grep -qiE '\.(env|sql|bak|backup|key|pem|log|cfg|conf|config|yml|yaml|json|xml|csv|xls|xlsx|gz|tar|zip)$'; then
@@ -685,26 +679,34 @@ phase_dirlisting
 [[ $DO_CRAWL  -eq 1 ]] && phase_crawl
 
 # ── Results ───────────────────────────────────────────────────────────────────
+# Count from temp files (subshells wrote here instead of in-memory variables)
+TOTAL_SCANNED=$(wc -l < "$TMP_DIR/scanned" 2>/dev/null | tr -d ' ')
+N_CRITICAL=$(wc -l < "$TMP_DIR/critical" 2>/dev/null | tr -d ' ')
+N_HIGH=$(wc -l < "$TMP_DIR/high"     2>/dev/null | tr -d ' ')
+N_MEDIUM=$(wc -l < "$TMP_DIR/medium"  2>/dev/null | tr -d ' ')
+N_INFO=$(wc -l < "$TMP_DIR/info"    2>/dev/null | tr -d ' ')
+TOTAL_FOUND=$(( N_CRITICAL + N_HIGH + N_MEDIUM + N_INFO ))
+
 echo
 echo -e "${BOLD}═══════════════════════════════════════════════════════════${RESET}"
 echo -e "${BOLD} RESULTS — ${DOMAIN}${RESET}"
 echo -e "${BOLD}═══════════════════════════════════════════════════════════${RESET}"
 
-if [[ ${#RES_INFO[@]} -gt 0 ]]; then
+if [[ $N_INFO -gt 0 ]]; then
   echo -e "\n${CYAN}${BOLD}── Subdomains / Info ────────────────────────────────────${RESET}"
-  for l in "${RES_INFO[@]}";     do echo -e "  $l"; done
+  while IFS= read -r l; do echo -e "  $l"; done < "$TMP_DIR/info"
 fi
-if [[ ${#RES_CRITICAL[@]} -gt 0 ]]; then
+if [[ $N_CRITICAL -gt 0 ]]; then
   echo -e "\n${RED}${BOLD}── CRITICAL ─────────────────────────────────────────────${RESET}"
-  for l in "${RES_CRITICAL[@]}"; do echo -e "  $l"; done
+  while IFS= read -r l; do echo -e "  $l"; done < "$TMP_DIR/critical"
 fi
-if [[ ${#RES_HIGH[@]} -gt 0 ]]; then
+if [[ $N_HIGH -gt 0 ]]; then
   echo -e "\n${YELLOW}${BOLD}── HIGH ─────────────────────────────────────────────────${RESET}"
-  for l in "${RES_HIGH[@]}";     do echo -e "  $l"; done
+  while IFS= read -r l; do echo -e "  $l"; done < "$TMP_DIR/high"
 fi
-if [[ ${#RES_MEDIUM[@]} -gt 0 ]]; then
+if [[ $N_MEDIUM -gt 0 ]]; then
   echo -e "\n${BLUE}${BOLD}── MEDIUM ───────────────────────────────────────────────${RESET}"
-  for l in "${RES_MEDIUM[@]}";   do echo -e "  $l"; done
+  while IFS= read -r l; do echo -e "  $l"; done < "$TMP_DIR/medium"
 fi
 
 if [[ $TOTAL_FOUND -eq 0 ]]; then
@@ -715,6 +717,6 @@ echo
 echo -e "${DIM}───────────────────────────────────────────────────────────${RESET}"
 echo -e "  Probes   : ${TOTAL_SCANNED}"
 echo -e "  Found    : ${BOLD}${TOTAL_FOUND}${RESET}"
-echo -e "  Critical : ${RED}${#RES_CRITICAL[@]}${RESET}  High: ${YELLOW}${#RES_HIGH[@]}${RESET}  Medium: ${BLUE}${#RES_MEDIUM[@]}${RESET}  Info: ${CYAN}${#RES_INFO[@]}${RESET}"
+echo -e "  Critical : ${RED}${N_CRITICAL}${RESET}  High: ${YELLOW}${N_HIGH}${RESET}  Medium: ${BLUE}${N_MEDIUM}${RESET}  Info: ${CYAN}${N_INFO}${RESET}"
 [[ -n "$OUTPUT" ]] && echo -e "  Saved to : ${OUTPUT}"
 echo
